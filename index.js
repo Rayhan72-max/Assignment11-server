@@ -26,14 +26,32 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-    app.get('/cars', async (req, res) => {
-      
-      res.send("Hello from cars route!");
-    })
+    const carhub = client.db('carhub');
+    const cars = carhub.collection('cars');
     app.post('/addcar', async (req, res) => {
       const car = req.body;
       console.log(car);
-      const result = await client.db('carhub').collection('cars').insertOne(car);
+      const result = await cars.insertOne(car);
+      res.send(result);
+    });
+    app.get('/mycar', async (req, res) => {
+      const cursor = cars.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    app.put('/updatecar/:id', async (req, res) => {
+      const car = req.body;
+      console.log(car);
+      const id = req.params.id;
+      console.log(id);
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          name: car.name,
+          price: 20000,
+        },
+      };
+      const result = await cars.updateOne(filter, updateDoc);
       res.send(result);
     });
     // Send a ping to confirm a successful connection
