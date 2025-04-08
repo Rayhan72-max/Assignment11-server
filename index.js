@@ -1,8 +1,9 @@
 const express = require('express');
-
+const jwt = require("jsonwebtoken");
+const cookiesParser = require("cookie-parser");
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 dotenv.config();
@@ -12,6 +13,22 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(cookiesParser())
+
+const verifyToken = (req,res,next)=>{
+  const token = req?.cookies?.token;
+  if(!token){
+    return res.status(401).send({message:'Unauthorize user'})
+  }
+  jwt.verify(token,process.env.JWT_SECRET,(err,decoded)=>{
+    if(err){
+      return res.status(401).send({message:"Unathorized User"})
+    }
+    req.user=decoded;
+    next()
+  })
+  
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.zd2hkzs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -28,39 +45,163 @@ async function run() {
     await client.connect();
     const carhub = client.db('carhub');
     const cars = carhub.collection('cars');
+    const bookings = carhub.collection('bookings');
     app.post('/addcar', async (req, res) => {
       const car = req.body;
-      console.log(car);
+
       const result = await cars.insertOne(car);
       res.send(result);
     });
-    app.get('/mycar', async (req, res) => {
+    app.get('/allcars', async (req, res) => {
       const cursor = cars.find();
       const result = await cursor.toArray();
       res.send(result);
     });
-    app.put('/updatecar/:id', async (req, res) => {
-      const car = req.body;
-      console.log(car);
-      const id = req.params.id;
-      console.log(id);
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          name: car.name,
-          price: 20000,
-        },
-      };
-      const result = await cars.updateOne(filter, updateDoc);
+    app.get('/mycar/:email',verifyToken,async (req, res) => {
+      const user = req.user.email;
+      const email = req.params.email;
+      if(email !== user){
+        res.status(403).send({message:"Forbidden"})
+      }
+      const query = { Email: email };
+      const cursor = cars.find(query);
+      const result = await cursor.toArray();
       res.send(result);
     });
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    //await client.close();
-  }
+    app.get('/details/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await cars.findOne(query);
+
+      res.send(result);
+    });
+    app.get('/available', async (req, res) => {
+      const query = req.query;
+      if (query.search === "") {
+        const cursor = cars.find({ Availability: "Available" });
+        const result = await cursor.toArray();
+        res.send(result);
+      } else {
+        const cursor = cars.find({
+          $or: [
+            { Model: { $regex: query.search, $options: 'i' } },
+            { Location: { $regex: query.search, $options: 'i' } },
+            { features: { $regex: query.search, $options: 'i' } },
+          ], Availability: "Available"
+        });
+        const result = await cursor.toArray();
+        res.send(result);
+      }
+
+    });
+
+    app.delete('/deletecar/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await cars.deleteOne(filter);
+      res.send(result);
+    })
+
+    app.patch('/bookings/:id', async (req, res) => {
+      const car = req.body;
+      const count = car.car.Booking_count;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+        Booking_count: count+ 1,
+        BookingDate: today,
+        Status: "Confirmed",
+      },
+    };
+    const result = await cars.updateOne(filter, updateDoc, options);
+    res.send(result);
+  })
+
+  app.post("/jwt",async(req,res)=>{
+    const user = req.body;
+    const token = jwt.sign(user,process.env.JWT_SECRET,{expiresIn:"1hr"})
+    
+    res
+    .cookie('token',token,{
+      httpOnly:true,
+      secure:false
+    })
+    .send({success:true});
+  })
+
+
+  app.patch('/modifydate/:id',async(req,res)=>{
+    const car = req.body;
+    console.log(car);
+    const id = req.params.id;
+    console.log(id);
+    const filter = { _id: new ObjectId(id) };
+    const options = { upsert: true };
+    const updateDoc = {
+      $set: {
+        BookingDate: car.start,
+      },
+    }
+    const result = await cars.updateOne(filter, updateDoc,options);
+    res.send(result);
+  })
+
+
+
+
+
+       app.patch('/cancelbookings/:id',async(req,res)=>{
+        const id = req.params.id;
+        console.log("booking cancelled",id);
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const updateDoc = {
+          $set: {
+            Status: "Cancelled",
+          },
+        };
+        const result = await cars.updateOne(filter, updateDoc,options);
+        res.send(result); 
+       })
+    
+
+  app.get('/bookings', async (req, res) => {
+
+    const cursor = cars.find({ Status: "Confirmed" });
+    const result = await cursor.toArray();
+    res.send(result);
+  })
+
+  app.put('/updatecar/:id', async (req, res) => {
+    const car = req.body;
+    console.log(car);
+    const id = req.params.id;
+    console.log(id);
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = {
+      $set: {
+        Model: car.name,
+        Daily_Price: car.rentalPrice,
+        Availability: car.availability,
+        Location: car.location,
+        ImageUrl: car.imageUrl,
+        Description: car.description,
+        Features: car.features,
+      },
+    };
+    const result = await cars.updateOne(filter, updateDoc);
+    res.send(result);
+  });
+  // Send a ping to confirm a successful connection
+  await client.db("admin").command({ ping: 1 });
+  console.log("Pinged your deployment. You successfully connected to MongoDB!");
+} finally {
+  // Ensures that the client will close when you finish/error
+  //await client.close();
+}
 }
 run().catch(console.dir);
 
