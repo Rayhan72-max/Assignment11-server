@@ -105,22 +105,34 @@ async function run() {
       res.send(result);
     })
 
-    app.patch('/bookings/:id', async (req, res) => {
+    app.post('/bookings', async (req, res) => {
+      console.log("Inserted ")
       const car = req.body;
+      console.log(car)
+      const result = await bookings.insertOne(car);
+      res.send(result);
+    })
+
+
+    app.patch('/bookings/:id', async (req, res) => {
+      
+      const car = req.body;
+      console.log("car is",car)
       const count = car.car.Booking_count;
+      console.log("booking count is ",count)
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
           Booking_count: count + 1,
-          BookingDate: today,
-          Status: "Confirmed",
         },
       };
-      const result = await cars.updateOne(filter, updateDoc, options);
+      const result = await cars.updateOne(filter,updateDoc,options);
       res.send(result);
     })
+
+    
 
     app.post('/logout',async(req,res)=>{
       console.log("logging out")
@@ -175,9 +187,10 @@ async function run() {
     })
 
 
-    app.get('/bookings', async (req, res) => {
-
-      const cursor = cars.find({ Status: "Confirmed" });
+    app.get('/bookings/:email', async (req, res) => {
+      const email = req.params.email;
+      console.log(email)
+      const cursor = bookings.find({email:email});
       const result = await cursor.toArray();
       res.send(result);
     })
