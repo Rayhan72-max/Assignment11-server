@@ -115,21 +115,47 @@ async function run() {
     })
 
 
+   app.get('/cancelbookings/:id',verifyToken,async (req, res) => {
+  const id = req.params.id;
+  console.log(id)
+  const query = {_id: new ObjectId(id)};
+    console.log(query)
+  const result = await cars.findOne(query);
+
+  res.send(result);
+  
+   })
+
+
+
     app.patch('/bookings/:id', async (req, res) => {
       
       const car = req.body;
       
-      const count = car.car.Booking_count;
+      console.log(car)
       
+      const count = car?.car?.Booking_count;
       const id = req.params.id;
+      console.log("original id", id);
       const filter = { _id: new ObjectId(id) };
+      console.log("filter is",filter)
       const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-          Booking_count: count + 1,
-        
-        },
-      };
+      
+      if(car.Status){
+        const count = car.count;
+        const updateDoc = {
+          $set: {
+            Booking_count:count - 1,
+          },
+        };  
+        const result = await cars.updateOne(filter,updateDoc,options);
+        return res.send(result);
+      }
+        const updateDoc = {
+          $set: {
+            Booking_count: count +1,
+          },
+        };
       const result = await cars.updateOne(filter,updateDoc,options);
       res.send(result);
     })
@@ -196,7 +222,7 @@ async function run() {
     })
 
 
-    app.get('/bookings/:email',async (req, res) => {
+    app.get('/bookings/:email',verifyToken,async (req, res) => {
       const email = req.params.email;
       
       const cursor = bookings.find({email:email});
@@ -204,7 +230,7 @@ async function run() {
       res.send(result);
     })
     
-    app.put('/updatecar/:id', async (req, res) => {
+    app.patch('/updatecar/:id', async (req, res) => {
       const car = req.body;
       
       const id = req.params.id;
@@ -213,7 +239,7 @@ async function run() {
       const updateDoc = {
         $set: {
           Model: car.name,
-          Daily_Price: car.rentalPrice,
+          Daily_Price: car?.rentalPrice,
           Availability: car.availability,
           Location: car.location,
           ImageUrl: car.imageUrl,
@@ -228,14 +254,11 @@ async function run() {
     //await client.db("admin").command({ ping: 1 });
     
   } finally {
-    // Ensures that the client will close when you finish/error
+    
     //await client.close();
   }
 }
 run().catch(console.dir);
 
 
-
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+app.listen(port)
