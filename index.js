@@ -9,7 +9,7 @@ const port = process.env.PORT || 5000;
 dotenv.config();
 
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: ['http://localhost:5173','https://dimple-firebase-6bee0.firebaseapp.com','https://dimple-firebase-6bee0.firebaseapp.com'],
   credentials: true,
 }));
 app.use(express.json());
@@ -31,7 +31,7 @@ const verifyToken = (req, res, next) => {
 }
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.zd2hkzs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -42,7 +42,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    //await client.connect();
     const carhub = client.db('carhub');
     const cars = carhub.collection('cars');
     const bookings = carhub.collection('bookings');
@@ -57,12 +57,10 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
-    app.get('/mycar/:email', async (req, res) => {
-      //const user = req.user.email;
+    app.get('/mycar/:email',verifyToken,async (req, res) => {
+      
       const email = req.params.email;
-      /* if(email !== user){
-        res.status(403).send({message:"Forbidden"})
-      } */
+      
       const query = { Email: email };
       const cursor = cars.find(query);
       const result = await cursor.toArray();
@@ -73,6 +71,14 @@ async function run() {
       const query = { _id: new ObjectId(id) };
 
       const result = await cars.findOne(query);
+
+      res.send(result);
+    });
+    app.get('/bookingdetails/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await bookings.findOne(query);
 
       res.send(result);
     });
@@ -98,17 +104,12 @@ async function run() {
           }
         }); 
 
-    app.delete('/deletecar/:id', async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const result = await cars.deleteOne(filter);
-      res.send(result);
-    })
+    
 
-    app.post('/bookings', async (req, res) => {
-      console.log("Inserted ")
+    app.post('/bookings',async (req, res) => {
+      
       const car = req.body;
-      console.log(car)
+      
       const result = await bookings.insertOne(car);
       res.send(result);
     })
@@ -117,15 +118,16 @@ async function run() {
     app.patch('/bookings/:id', async (req, res) => {
       
       const car = req.body;
-      console.log("car is",car)
+      
       const count = car.car.Booking_count;
-      console.log("booking count is ",count)
+      
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
           Booking_count: count + 1,
+        
         },
       };
       const result = await cars.updateOne(filter,updateDoc,options);
@@ -135,18 +137,23 @@ async function run() {
     
 
     app.post('/logout',async(req,res)=>{
-      console.log("logging out")
-      res.clearCookie('token').send({message:"logged out"});
+      
+      res.clearCookie('token',{
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+      }).send({message:"logged out"});
     })
 
     app.post("/jwt", async (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "1hr" })
+      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "6hr" })
 
       res
         .cookie('token', token, {
           httpOnly: true,
-          secure: false
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
         })
         .send({ success: true });
     })
@@ -154,17 +161,17 @@ async function run() {
 
     app.patch('/modifydate/:id', async (req, res) => {
       const car = req.body;
-      console.log(car);
+      
       const id = req.params.id;
-      console.log(id);
+      
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
       const updateDoc = {
         $set: {
-          BookingDate: car.start,
+          BookingDate: car.dates.start,
         },
       }
-      const result = await cars.updateOne(filter, updateDoc, options);
+      const result = await bookings.updateOne(filter, updateDoc, options);
       res.send(result);
     })
 
@@ -172,34 +179,36 @@ async function run() {
 
 
 
-    app.patch('/cancelbookings/:id', async (req, res) => {
+    app.delete('/cancelbookings/:id', async (req, res) => {
       const id = req.params.id;
-      console.log("booking cancelled", id);
+      
       const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: {
-          Status: "Cancelled",
-        },
-      };
-      const result = await cars.updateOne(filter, updateDoc, options);
+      const result = await bookings.deleteOne(filter);
       res.send(result);
     })
 
 
-    app.get('/bookings/:email', async (req, res) => {
+    app.delete('/deletecar/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await cars.deleteOne(filter);
+      res.send(result);
+    })
+
+
+    app.get('/bookings/:email',async (req, res) => {
       const email = req.params.email;
-      console.log(email)
+      
       const cursor = bookings.find({email:email});
       const result = await cursor.toArray();
       res.send(result);
     })
-
+    
     app.put('/updatecar/:id', async (req, res) => {
       const car = req.body;
-      console.log(car);
+      
       const id = req.params.id;
-      console.log(id);
+     
       const filter = { _id: new ObjectId(id) };
       const updateDoc = {
         $set: {
@@ -216,8 +225,8 @@ async function run() {
       res.send(result);
     });
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    //await client.db("admin").command({ ping: 1 });
+    
   } finally {
     // Ensures that the client will close when you finish/error
     //await client.close();
@@ -226,9 +235,6 @@ async function run() {
 run().catch(console.dir);
 
 
-app.get('/', (req, res) => {
-  res.send('Hello World!');
-});
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
