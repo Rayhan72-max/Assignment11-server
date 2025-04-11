@@ -17,7 +17,7 @@
 | Package          | Purpose                                        |
 |------------------|------------------------------------------------|
 | **express**       | Web framework for building API routes         |
-| **mongoose**      | MongoDB object modeling and schema creation   |
+| **mongooDB**      | MongoDB object modeling and schema creation   |
 | **dotenv**        | Loads environment variables from `.env` file  |
 | **cors**          | Enables Cross-Origin Resource Sharing         |
 | **jsonwebtoken**  | JWT token generation and verification         |
